@@ -31,5 +31,15 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# marimo notebooks: a bare trailing expression IS the cell's rendered output
+# (B018), and markdown/label prose runs long (E501).
+"notebooks/*.py" = ["B018", "E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ty.src]
+# Notebooks carry their own PEP 723 sandbox deps (marimo, matplotlib) that
+# aren't project deps; they're checked by `make check-notebook` instead.
+exclude = ["notebooks"]
