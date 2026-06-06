@@ -16,3 +16,4 @@ logs/
 *.png
 limits.json
 .env*
+demo_data/

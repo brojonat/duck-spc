@@ -7,6 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- v1 core: `Source`/`Stream`/`Limits`/`Report` library API with all XmR math
+  (derivations, per-group limits, Rule 1 + Rule 2 detection) pushed down into
+  DuckDB SQL over `read_parquet()`. Limits artifact (schema v1) with full
+  provenance; group keys are explicit column/value maps.
+- Explicit optional `exposure` column (default 1): `<period>:rate` derivation
+  computes `sum(value)/sum(exposure)` inside the engine, since per-period
+  rates cannot be precomputed row-wise upstream.
+- Synthetic data generator (`duck_spc.synth`) emitting hive-partitioned
+  Parquet plus a ground-truth manifest of injected signals (spike / shift /
+  variance), magnitudes expressed in daily-stream sigmas.
+- Test suite cross-checking the SQL against the SPC skill's numpy reference
+  implementation point-for-point, and asserting injected signals are
+  recovered exactly (clean group stays silent).
+- `make demo`: generate → baseline → check end-to-end; report JSON on
+  stdout, narrative on stderr.
+
+### Changed
+
+- README artifact format: `groups` is a list with explicit `key` maps
+  (comma-joined keys would corrupt on categorical values containing commas);
+  baseline windows documented as half-open `[start, end)`.
+
+## [0.0.1] - 2026-06-06
+
+### Added
+
 - Project bootstrap: README designing both the library API (`Source` /
   `Stream` / `Limits` / `Report`) and the CLI surface (`baseline` / `check` /
   `chart`) before any code.

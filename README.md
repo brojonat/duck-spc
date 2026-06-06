@@ -56,7 +56,7 @@ duck-spc baseline \
   --ts ts --value latency_ms \
   --group-by region,service \
   --derive day:p95 \
-  --window 2026-01-01:2026-01-28 \
+  --window 2026-01-01:2026-01-29 \
   > limits.json
 
 # 2. Check new data against the frozen limits
@@ -78,8 +78,21 @@ duck-spc chart --limits limits.json --group us-east,checkout -o chart.png
 | Value | Meaning |
 |---|---|
 | `none` | chart raw individual values (default) |
-| `<period>:<stat>` | per-period statistic, e.g. `day:mean`, `day:p95`, `hour:median`, `day:sd` |
+| `<period>:<stat>` | per-period statistic, e.g. `day:mean`, `day:p95`, `hour:median`, `day:sd`, `day:count`, `day:rate` |
 | `diff` | first differences (de-trending) |
+
+Periods: `hour`, `day`, `week`, `month`. Stats: `mean`, `median`, `p90`,
+`p95`, `p99`, `sd`, `count`, `sum`, `rate`. Windows are half-open
+(`[start, end)`).
+
+**Exposure.** Pass `--exposure <col>` (or `Source(..., exposure=...)`) when
+rows carry unequal weight — units in operation, requests served. Then
+`day:rate` charts `sum(value) / sum(exposure)` per period, which cannot be
+precomputed upstream as a row-wise ratio (sum-of-ratios ≠ ratio-of-sums).
+Without an exposure column every row counts as 1 and `rate` degenerates to
+the per-period mean. Everything upstream of the
+`(ts, categories…, value[, exposure])` contract — joins, unit conversions,
+normalization inputs — is the caller's job.
 
 ## Library
 
@@ -120,21 +133,24 @@ its own provenance so a chart's limits are always traceable:
 ```json
 {
   "version": 1,
-  "computed_at": "2026-06-06T00:00:00Z",
+  "computed_at": "2026-06-06T00:00:00+00:00",
   "source": "s3://my-bucket/events/",
-  "ts": "ts", "value": "latency_ms",
+  "ts": "ts", "value": "latency_ms", "exposure": null,
   "group_by": ["region", "service"],
   "derive": "day:p95",
-  "baseline_window": ["2026-01-01", "2026-01-28"],
-  "groups": {
-    "us-east,checkout": {
+  "baseline_window": ["2026-01-01", "2026-01-29"],
+  "groups": [
+    {
+      "key": {"region": "us-east", "service": "checkout"},
       "n": 28, "center": 412.3,
-      "lnpl": 318.9, "unpl": 505.7,
-      "mr_bar": 35.1, "mr_ucl": 114.7
+      "mr_bar": 35.1, "lnpl": 318.9, "unpl": 505.7, "mr_ucl": 114.7
     }
-  }
+  ]
 }
 ```
+
+Group keys are explicit column/value maps (not joined strings), so
+categorical values containing commas can't corrupt the contract.
 
 ## Build / run / test
 
