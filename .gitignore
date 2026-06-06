@@ -1,0 +1,18 @@
+# Skills are restored from skills-lock.json via `npx skills experimental_install`
+.agents/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+dist/
+*.egg-info/
+
+# Feedback loops, not artifacts
+logs/
+
+# Local data / outputs
+*.parquet
+*.png
+limits.json
+.env*

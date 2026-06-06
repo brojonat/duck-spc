@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": {
+    "ducklake": {
+      "source": "brojonat/llmsrules",
+      "sourceType": "github",
+      "skillPath": "skills/ducklake/SKILL.md",
+      "computedHash": "4e1623db883ad35d406c31911dc09d9677d5a5511fca7b7c5919493eac14a39a"
+    },
+    "marimo-notebook": {
+      "source": "marimo-team/skills",
+      "sourceType": "github",
+      "skillPath": "skills/marimo-notebook/SKILL.md",
+      "computedHash": "56c73bca1669181c2e0c970f2276e119960b6c68d7301fd66fe33107142a89e3"
+    },
+    "parquet-analysis": {
+      "source": "brojonat/llmsrules",
+      "sourceType": "github",
+      "skillPath": "skills/parquet-analysis/SKILL.md",
+      "computedHash": "6c5f5b7029b48a05acea30b1e0b088429e6bbd14d4fb11774a61c10cf18da185"
+    },
+    "pyproject-config": {
+      "source": "brojonat/llmsrules",
+      "sourceType": "github",
+      "skillPath": "skills/pyproject-config/SKILL.md",
+      "computedHash": "2093b3201754fc5615009cbf234a5a587eb455d9dfca8d1f2e18739ad6b4a6e8"
+    },
+    "python-cli": {
+      "source": "brojonat/llmsrules",
+      "sourceType": "github",
+      "skillPath": "skills/python-cli/SKILL.md",
+      "computedHash": "7f37b04e607c9802288ee450e07aa5a17db5638c37691e20f5eb2d853d800269"
+    },
+    "statistical-process-control": {
+      "source": "brojonat/llmsrules",
+      "sourceType": "github",
+      "skillPath": "skills/statistical-process-control/SKILL.md",
+      "computedHash": "fdbad4f63e6d3502346b4a36515063a825e1a12c3eb75357590108c0ad575360"
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/systematic-debugging/SKILL.md",
+      "computedHash": "7246fdd3a795fc3daff0af72044ca99bf836e4e6a46844742858786fdfb86488"
+    },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "computedHash": "126f1ebf6ccd414f42544f6e83d8cc5adb089e1108eaffb7c400701e37eecd9f"
+    }
+  }
+}
