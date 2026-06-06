@@ -26,6 +26,20 @@
 - [ ] mR-chart rule (moving range above mR_UCL) so the injected variance
       signal in the test fixture is detectable, then assert on it
 
+## Presentation
+- [x] marimo story notebook (`notebooks/trust_the_limits.py`): d2 derivation,
+      distribution-free bounds, empirical false-alarm gauntlet, SD-trap demo
+- [x] HTML slide deck (`docs/deck/index.html`): custom engine, d3 visuals
+      (live stable process, XmR anatomy, gauntlet bars, SD-vs-mR̄ panels)
+- [ ] Decide on / build the stubbed animations (`TODO(anim)` markers):
+      distribution-morph with stable 3σ tail mass (centerpiece), limits
+      drawn left-to-right, SD-limits inflating live, rolling-limits
+      absorbing an anomaly, pager vignette
+- [ ] Second notebook: drive the real duck-spc pipeline (synth → baseline →
+      check) once the local-package story for sandboxed notebooks is settled
+- [ ] Deck: regenerate gauntlet numbers from the notebook when defaults
+      change (numbers are pasted into `hooks["gauntlet"]`, provenance noted)
+
 ## Roadmap (post-v1)
 - [ ] DuckLake source (`ducklake:postgres:...`) [blocked: v1]
 - [ ] Nonparametric quantile limits for heavy-tailed streams

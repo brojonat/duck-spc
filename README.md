@@ -152,6 +152,21 @@ its own provenance so a chart's limits are always traceable:
 Group keys are explicit column/value maps (not joined strings), so
 categorical values containing commas can't corrupt the contract.
 
+## Presentation
+
+The sales pitch — *why you can trust 2.66 even against pathological
+distributions* — lives in two artifacts:
+
+- **`notebooks/trust_the_limits.py`** — marimo notebook
+  (`make edit-notebook`). Interactive: the d₂ derivation, the
+  distribution-free bounds (Chebyshev 11.1% / unimodal 4.9% / normal 0.27%),
+  and the empirical gauntlet running the full XmR procedure against
+  heavy-tailed monsters. Every number in the deck is computed here.
+- **`docs/deck/index.html`** — self-contained HTML slide deck
+  (`make run-deck`, then http://localhost:8042). d3 visuals, keyboard
+  navigation, animation stubs marked `ANIM STUB` / `TODO(anim)` for the
+  fancier sequences we may build later.
+
 ## Build / run / test
 
 ```bash

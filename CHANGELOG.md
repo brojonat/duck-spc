@@ -23,6 +23,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `make demo`: generate → baseline → check end-to-end; report JSON on
   stdout, narrative on stderr.
 
+- Presentation layer: marimo story notebook (`trust_the_limits.py`) with the
+  2.66 derivation, Chebyshev/Vysochanskij–Petunin bounds, and an empirical
+  gauntlet (full XmR procedure vs pathological distributions: lognormal
+  4.5%, pareto α=2.5 4.8% false alarms — all under the 4.9% unimodal bound);
+  self-contained d3 slide deck (`docs/deck/`) with live visuals and stubbed
+  animation hooks. `make run-deck` / `make edit-notebook` /
+  `make check-notebook`.
+- marimo-pair skill pinned for live notebook pairing sessions.
+
 ### Changed
 
 - README artifact format: `groups` is a list with explicit `key` maps

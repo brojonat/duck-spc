@@ -14,6 +14,8 @@ npx skills add brojonat/llmsrules -s pyproject-config -y
 npx skills add brojonat/llmsrules -s python-cli -y
 # Demo notebooks (the SPC skill's worked example is marimo)
 npx skills add marimo-team/skills -s marimo-notebook -y
+# Live-pairing workflow for developing marimo notebooks
+npx skills add marimo-team/marimo-pair -s marimo-pair -y
 # Dev practice
 npx skills add obra/superpowers -s test-driven-development -y
 npx skills add obra/superpowers -s systematic-debugging -y

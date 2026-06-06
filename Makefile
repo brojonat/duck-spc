@@ -27,6 +27,21 @@ demo: ## Generate synthetic parquet, run baseline/check/chart end-to-end, tee to
 	@mkdir -p logs
 	uv run python -m duck_spc.demo 2>&1 | tee logs/demo.log
 
+.PHONY: run-deck
+run-deck: ## Serve the slide deck at http://localhost:8042, tee to logs/
+	@mkdir -p logs
+	cd docs/deck && python3 -m http.server 8042 2>&1 | tee ../../logs/deck.log
+
+.PHONY: edit-notebook
+edit-notebook: ## Edit the story notebook live (marimo, discoverable for pairing)
+	@mkdir -p logs
+	uvx marimo edit --sandbox --no-token notebooks/trust_the_limits.py 2>&1 | tee logs/marimo.log
+
+.PHONY: check-notebook
+check-notebook: ## Lint the notebook and run it in script mode
+	uvx marimo check notebooks/trust_the_limits.py
+	uv run --with marimo,numpy,matplotlib python notebooks/trust_the_limits.py
+
 .PHONY: skills
 skills: ## (Re)install the pinned agent skills
 	./install-skills.sh
