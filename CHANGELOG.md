@@ -26,6 +26,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - CLI (`duck-spc baseline|check|chart`, Click): JSON on stdout, narrative on
   stderr, exit 0 = stable / 1 = signals / 2 = error. Source overrides reuse
   the artifact's column contract.
+- `duck-spc look`: one-shot exploration — freeze a baseline (defaults to the
+  first 25% of the data), check the rest, render ASCII XmR charts and
+  per-group verdicts straight to the terminal; `--json` for scripting.
+- `duck-spc visualize`: Unix pipe sink — renders ASCII charts from a limits
+  artifact or a check report on stdin/FILE. Check reports now embed their
+  limits artifact (provenance + pipeability); hand-rolled zero-dependency
+  renderer with ANSI color on TTYs (NO_COLOR respected). CLI errors are
+  uniformly exit 2 so exit 1 strictly means "signals detected".
 - XmR chart pair rendering (`Limits.chart` / `chart` verb): X + mR panels,
   frozen-limit provenance in the title, baseline shaded, signals red; mR
   breaches amber (advisory) unless `--mr-rule` opted in. Wired into

@@ -52,6 +52,18 @@ straight face and a paper trail.
 ## CLI
 
 ```bash
+# 0. Just exploring? One shot — point it at a bucket, BOOM, ASCII XmR
+#    charts and per-group verdicts in your face (exit code = the verdict).
+#    Baseline defaults to the first 25% of the data; --window to control.
+duck-spc look --source 's3://my-bucket/events/' \
+  --value latency_ms --group-by region,service --derive day:p95
+
+# Pipe-friendly visualization: both artifacts and reports render
+#    (check reports embed their limits, so the pipe just works)
+duck-spc check --limits limits.json | duck-spc visualize
+duck-spc baseline --source ... --window ... | duck-spc visualize
+duck-spc visualize limits.json
+
 # 1. Compute frozen limits from a baseline window (writes JSON to stdout)
 duck-spc baseline \
   --source 's3://my-bucket/events/' \

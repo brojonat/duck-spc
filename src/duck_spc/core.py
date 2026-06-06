@@ -81,6 +81,20 @@ class Stream:
         cols = [d[0] for d in cur.description]
         return [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
 
+    def default_baseline_window(self, fraction: float = 0.25) -> tuple[str, str]:
+        """A baseline window covering the first `fraction` of the data's span.
+
+        For exploration (`duck-spc look`) — production baselines should be
+        chosen deliberately and passed explicitly.
+        """
+        row = _connect().execute(
+            f"SELECT min(ts), max(ts) FROM ({self.sql()}) WHERE value IS NOT NULL"
+        ).fetchone()
+        t0, t1 = row if row is not None else (None, None)
+        if t0 is None or t0 == t1:
+            raise ValueError("not enough data to infer a baseline window")
+        return str(t0), str(t0 + (t1 - t0) * fraction)
+
     def baseline(self, start: str, end: str) -> Limits:
         """Compute frozen per-group XmR limits from the window [start, end)."""
         s = self.source
@@ -142,14 +156,18 @@ class Limits:
         Path(path).write_text(json.dumps(self.to_dict(), indent=2) + "\n")
 
     @classmethod
-    def load(cls, path: str | Path) -> Limits:
-        d = json.loads(Path(path).read_text())
+    def from_dict(cls, d: dict[str, Any]) -> Limits:
+        d = dict(d)
         version = d.pop("version", None)
         if version != ARTIFACT_VERSION:
             raise ValueError(f"unsupported limits artifact version: {version!r}")
         d["group_by"] = tuple(d["group_by"])
         d["baseline_window"] = tuple(d["baseline_window"])
         return cls(**d)
+
+    @classmethod
+    def load(cls, path: str | Path) -> Limits:
+        return cls.from_dict(json.loads(Path(path).read_text()))
 
     # -- evaluation ---------------------------------------------------------
 
@@ -231,7 +249,9 @@ class Limits:
             groups_checked=len({tuple(p[c] for c in self.group_by) for p in points}),
             since=since if since is not None else self.baseline_window[1],
             until=until,
+            mr_rule=mr_rule,
             signals=signals,
+            limits=self.to_dict(),  # provenance: a report carries its limits
         )
 
     def chart(
@@ -265,14 +285,20 @@ class Limits:
 
 @dataclasses.dataclass
 class Report:
-    """The verdict. ok=True means: trust the statistics, go back to sleep."""
+    """The verdict. ok=True means: trust the statistics, go back to sleep.
+
+    Carries the limits artifact it was checked against, so a report is
+    self-describing (and pipeable into `duck-spc visualize`).
+    """
 
     ok: bool
     points_checked: int
     groups_checked: int
     since: str | None
     until: str | None
+    mr_rule: bool
     signals: list[dict[str, Any]]
+    limits: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)

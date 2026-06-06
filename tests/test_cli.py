@@ -52,6 +52,55 @@ def test_baseline_check_chart_end_to_end(dataset, tmp_path):
     assert png.stat().st_size > 10_000  # a real rendered figure, not a stub
 
 
+def test_look_one_shot(dataset):
+    """Point at a bucket -> charts + verdicts in your face, exit carries verdict."""
+    out, _ = dataset
+    runner = CliRunner()
+    res = runner.invoke(cli, [
+        "look", "--source", str(out),
+        "--value", "value", "--group-by", "region,service",
+        "--derive", "day:mean", "--window", f"{BASELINE[0]}:{BASELINE[1]}",
+    ])
+    assert res.exit_code == 1, res.output  # injected signals exist
+    assert "region=us-east, service=checkout" in res.stdout
+    assert "●" in res.stdout  # signal points on the chart
+    assert "✗" in res.stdout and "✓" in res.stdout  # mixed verdicts across groups
+    assert "special-cause variation" in res.stdout
+
+
+def test_look_default_window_and_json(dataset):
+    out, _ = dataset
+    runner = CliRunner()
+    res = runner.invoke(cli, [
+        "look", "--source", str(out),
+        "--value", "value", "--group-by", "region,service",
+        "--derive", "day:mean", "--json",
+    ])
+    assert res.exit_code == 1, res.output
+    assert "baseline defaulted" in res.stderr
+    report = json.loads(res.stdout)
+    assert report["ok"] is False
+    assert report["limits"]["derive"] == "day:mean"  # report carries provenance
+
+
+def test_visualize_pipes_from_baseline_and_check(dataset, limits):
+    """The Unix contract: baseline | visualize and check | visualize."""
+    runner = CliRunner()
+
+    artifact_json = json.dumps(limits.to_dict())
+    res = runner.invoke(cli, ["visualize"], input=artifact_json)
+    assert res.exit_code == 1, res.output
+    assert "✗" in res.stdout and "·" in res.stdout
+
+    report_json = limits.check().to_json()
+    res = runner.invoke(cli, ["visualize"], input=report_json)
+    assert res.exit_code == 1, res.output
+    assert "go find the cause" in res.stdout
+
+    res = runner.invoke(cli, ["visualize"], input='{"what": "is this"}')
+    assert res.exit_code == 2
+
+
 def test_check_missing_limits_is_exit_2(tmp_path):
     runner = CliRunner()
     res = runner.invoke(cli, ["check", "--limits", str(tmp_path / "nope.json")])

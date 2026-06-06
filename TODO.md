@@ -25,6 +25,12 @@
       (`Limits.chart`); wired into `make demo` (demo_data/spike.png)
 - [x] mR-chart rule (moving range above mR_UCL), opt-in via
       `check(mr_rule=True)` / `--mr-rule`; variance x3 fixture asserted
+- [x] `duck-spc look`: one-shot explore verb (default baseline = first 25%),
+      ASCII XmR charts + verdicts on stdout, `--json` for scripting
+- [x] `duck-spc visualize`: pipe sink rendering ASCII charts from a limits
+      artifact or check report on stdin (reports embed their limits)
+- [ ] ASCII mR strip under the X chart in visualize/look (currently the mR
+      story is signal markers + verdict text only)
 
 ## Presentation
 - [x] marimo story notebook (`notebooks/trust_the_limits.py`): d2 derivation,

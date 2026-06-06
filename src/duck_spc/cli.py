@@ -9,14 +9,33 @@ JSON on stdout, narrative on stderr, the verdict in the exit code:
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import sys
 from pathlib import Path
+from typing import IO
 
 import click
 
+from duck_spc import ascii_chart
 from duck_spc.core import Limits, Source
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
+
+
+class Fail(click.ClickException):
+    """Runtime failure. Exit 2 — exit 1 strictly means 'signals detected'."""
+
+    exit_code = 2
+
+
+def term_width() -> int:
+    cols = shutil.get_terminal_size((100, 24)).columns
+    return max(40, min(cols - 14, 110))
+
+
+def want_color(stream: IO[str]) -> bool:
+    return stream.isatty() and "NO_COLOR" not in os.environ
 
 
 def say(msg: str) -> None:
@@ -78,7 +97,7 @@ def baseline(source: str, ts: str, value: str, group_by: str, exposure: str | No
     )
     limits = src.derive(derive).baseline(start, end)
     if not limits.groups:
-        raise click.ClickException(
+        raise Fail(
             f"no groups had >= 2 points in [{start}, {end}) — nothing to freeze"
         )
     say(f"froze limits for {len(limits.groups)} group(s) from [{start}, {end})")
@@ -139,6 +158,102 @@ def chart(limits_path: str, group: str, out: Path, source: str | None,
     path = limits.chart(values, out, source=source_from(limits, source),
                         since=since, until=until, mr_rule=mr_rule)
     say(f"wrote {path}")
+
+
+@cli.command()
+@click.option("--source", required=True, help="parquet path/glob/prefix (local, s3://, gs://)")
+@click.option("--ts", default="ts", show_default=True, help="timestamp column")
+@click.option("--value", required=True, help="value column")
+@click.option("--group-by", required=True, help="comma-separated stream-key columns")
+@click.option("--exposure", default=None, help="exposure column (default: every row counts 1)")
+@click.option("--derive", default="none", show_default=True,
+              help="stream derivation: none | diff | <period>:<stat> (e.g. day:p95)")
+@click.option("--window", default=None,
+              help="baseline window START:END (default: the first 25% of the data)")
+@click.option("--mr-rule", is_flag=True, help="also flag spread changes (mR above mR_UCL)")
+@click.option("--json", "as_json", is_flag=True,
+              help="emit the check report JSON instead of charts")
+@click.option("-o", "--out", type=click.Path(dir_okay=False, path_type=Path), default=None,
+              help="also save the limits artifact here")
+def look(source: str, ts: str, value: str, group_by: str, exposure: str | None, derive: str,
+         window: str | None, mr_rule: bool, as_json: bool, out: Path | None) -> None:
+    """One shot: freeze a baseline, check the rest, results in your face.
+
+    Exploration mode — production baselines deserve a deliberate --window
+    and a saved artifact (`baseline` + `check`).
+    """
+    src = Source(
+        path=source, ts=ts, value=value,
+        group_by=tuple(c.strip() for c in group_by.split(",")),
+        exposure=exposure,
+    )
+    stream = src.derive(derive)
+    if window is not None:
+        start, end = parse_window(window)
+    else:
+        start, end = stream.default_baseline_window()
+        say(f"baseline defaulted to the first 25% of the data: [{start}, {end}) "
+            "— pass --window to control it")
+    limits = stream.baseline(start, end)
+    if not limits.groups:
+        raise Fail(f"no groups had >= 2 points in [{start}, {end})")
+    if out is not None:
+        out.write_text(json.dumps(limits.to_dict(), indent=2) + "\n")
+        say(f"wrote {out}")
+    report = limits.check(mr_rule=mr_rule)
+    if as_json:
+        click.echo(report.to_json(indent=2))
+    else:
+        points = limits.evaluate(since=start)
+        text, _, _ = ascii_chart.render_report(
+            limits, points, width=term_width(), color=want_color(sys.stdout), mr_rule=mr_rule,
+        )
+        click.echo(text)
+    sys.exit(0 if report.ok else 1)
+
+
+@cli.command()
+@click.argument("input", type=click.File("r"), default="-", required=False)
+@click.option("--source", default=None, help="override the artifact's source path")
+@click.option("--since", default=None, help="chart from here (default: start of baseline window)")
+@click.option("--until", default=None, help="chart up to here (exclusive)")
+@click.option("--mr-rule", is_flag=True,
+              help="treat mR breaches as signals (implied by a report that used it)")
+def visualize(input: IO[str], source: str | None, since: str | None, until: str | None,
+              mr_rule: bool) -> None:
+    """Render ASCII XmR charts from JSON on stdin (or FILE).
+
+    Accepts either a limits artifact (`duck-spc baseline ... | duck-spc
+    visualize`) or a check report (`duck-spc check ... | duck-spc
+    visualize`) — reports carry their limits, so the pipe just works.
+    Exit 0 stable, 1 signals.
+    """
+    if getattr(input, "isatty", lambda: False)():
+        raise click.UsageError(
+            "expects a limits artifact or check report as FILE or on stdin, e.g.\n"
+            "  duck-spc check --limits limits.json | duck-spc visualize"
+        )
+    data = json.load(input)
+    if "signals" in data and "limits" in data:  # a check report
+        limits = Limits.from_dict(data["limits"])
+        mr_rule = mr_rule or bool(data.get("mr_rule"))
+        until = until if until is not None else data.get("until")
+    elif "groups" in data and "group_by" in data:  # a limits artifact
+        limits = Limits.from_dict(data)
+    else:
+        raise Fail(
+            "unrecognized input: expected a duck-spc limits artifact or check report"
+        )
+    points = limits.evaluate(
+        source_from(limits, source),
+        since=since if since is not None else limits.baseline_window[0],
+        until=until,
+    )
+    text, unstable, _ = ascii_chart.render_report(
+        limits, points, width=term_width(), color=want_color(sys.stdout), mr_rule=mr_rule,
+    )
+    click.echo(text)
+    sys.exit(1 if unstable else 0)
 
 
 def main() -> None:
