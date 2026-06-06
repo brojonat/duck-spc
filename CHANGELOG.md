@@ -23,6 +23,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `make demo`: generate → baseline → check end-to-end; report JSON on
   stdout, narrative on stderr.
 
+- CLI (`duck-spc baseline|check|chart`, Click): JSON on stdout, narrative on
+  stderr, exit 0 = stable / 1 = signals / 2 = error. Source overrides reuse
+  the artifact's column contract.
+- XmR chart pair rendering (`Limits.chart` / `chart` verb): X + mR panels,
+  frozen-limit provenance in the title, baseline shaded, signals red; mR
+  breaches amber (advisory) unless `--mr-rule` opted in. Wired into
+  `make demo`.
+- Opt-in mR rule (`check --mr-rule`): moving range above mR_UCL flags spread
+  changes the X chart misses; off by default per minimal-rules doctrine. The
+  injected variance x3 fixture is now detected and asserted in tests.
 - Presentation layer: marimo story notebook (`trust_the_limits.py`) with the
   2.66 derivation, Chebyshev/Vysochanskij–Petunin bounds, and an empirical
   gauntlet (full XmR procedure vs pathological distributions: lognormal

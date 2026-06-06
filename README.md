@@ -28,7 +28,9 @@ straight face and a paper trail.
   deliberate human act, never automatic.
 - **Minimal detection rules**: Rule 1 (point outside natural process
   limits) and Rule 2 (run of 9 on one side of the center line). No
-  Western Electric rule zoo.
+  Western Electric rule zoo. One opt-in extra: `--mr-rule` flags moving
+  ranges above mR_UCL (catches spread changes the X chart misses) — opt-in
+  because every added rule buys sensitivity with false alarms.
 - **Stream derivation first-class.** Raw telemetry is rarely chartable
   (seasonality, trend, noise). Derive a stationary stream — per-period
   mean/median/p95/SD, first differences — in the same SQL, then chart that.

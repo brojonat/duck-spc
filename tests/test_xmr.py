@@ -74,6 +74,23 @@ def test_injected_signals_detected(limits):
     assert signals_for(CLEAN_GROUP) == [], "stable process must stay silent"
 
 
+def test_variance_signal_via_mr_rule(limits):
+    """The injected variance x3 is invisible to default rules but caught by
+    the opt-in mR rule; opting in must not be the default."""
+    from conftest import VARIANCE_DAY, VARIANCE_GROUP
+
+    default = limits.check()
+    assert all("rule_mr" not in s["rules"] for s in default.signals)
+
+    report = limits.check(mr_rule=True)
+    mr_hits = [
+        s for s in report.signals
+        if s["group"] == VARIANCE_GROUP and "rule_mr" in s["rules"]
+    ]
+    assert mr_hits, "variance x3 must breach mR_UCL"
+    assert all(s["ts"] >= datetime.fromisoformat(VARIANCE_DAY) for s in mr_hits)
+
+
 def test_artifact_roundtrip(tmp_path, limits, source):
     """save -> load reproduces identical verdicts; provenance survives."""
     path = tmp_path / "limits.json"

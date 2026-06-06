@@ -128,12 +128,16 @@ def check_sql(
     """Score every point in [since, until) against frozen limits.
 
     Expects a registered `limits_tbl` with the group columns plus
-    center/lnpl/unpl. Parameters: [since] or [since, until].
+    center/lnpl/unpl/mr_ucl. Parameters: [since] or [since, until].
 
     Rule 2 uses gaps-and-islands: consecutive points on the same side of
     the center line share an island; islands of >= RUN_LENGTH flag every
     point in the run (matching the numpy reference implementation). Points
     exactly on the center line (side = 0) break runs and never flag.
+
+    rule_mr (moving range above mR_UCL — a spread change) is always
+    computed; whether it counts as a signal is the caller's opt-in. The
+    first point per group has no moving range and never flags.
     """
     g = ", ".join(qident(c) for c in group_by)
     until_clause = "AND ts < CAST(? AS TIMESTAMP)" if until is not None else ""
@@ -144,13 +148,14 @@ w AS (
   WHERE value IS NOT NULL AND ts >= CAST(? AS TIMESTAMP) {until_clause}
 ),
 j AS (
-  SELECT w.*, l.center, l.lnpl, l.unpl
+  SELECT w.*, l.center, l.lnpl, l.unpl, l.mr_ucl
   FROM w JOIN limits_tbl l USING ({g})
 ),
 scored AS (
   SELECT *,
          CASE WHEN value > center THEN 1 WHEN value < center THEN -1 ELSE 0 END AS side,
-         (value > unpl OR value < lnpl) AS rule1
+         (value > unpl OR value < lnpl) AS rule1,
+         abs(value - lag(value) OVER (PARTITION BY {g} ORDER BY ts)) AS mr
   FROM j
 ),
 runs AS (
@@ -165,7 +170,8 @@ flagged AS (
 )
 SELECT {g}, ts, value, rule1,
        (side <> 0 AND run_len >= {RUN_LENGTH}) AS rule2,
-       center, lnpl, unpl
+       coalesce(mr > mr_ucl, false) AS rule_mr,
+       mr, center, lnpl, unpl, mr_ucl
 FROM flagged
 ORDER BY {g}, ts
 """

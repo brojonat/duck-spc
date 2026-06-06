@@ -186,7 +186,7 @@ class Limits:
             "limits_tbl",
             pa.Table.from_pylist(
                 [
-                    {**g["key"], **{f: g[f] for f in ("center", "lnpl", "unpl")}}
+                    {**g["key"], **{f: g[f] for f in ("center", "lnpl", "unpl", "mr_ucl")}}
                     for g in self.groups
                 ]
             ),
@@ -201,20 +201,29 @@ class Limits:
         source: Source | None = None,
         since: str | None = None,
         until: str | None = None,
+        mr_rule: bool = False,
     ) -> Report:
+        """Score against frozen limits; Report.ok is the verdict.
+
+        Detection is Rule 1 + Rule 2 by default. `mr_rule=True` opts in to
+        flagging moving ranges above mR_UCL (catches spread changes the X
+        chart misses) — opt-in because every added rule buys sensitivity
+        with false alarms.
+        """
+        rules = ("rule1", "rule2") + (("rule_mr",) if mr_rule else ())
         points = self.evaluate(source, since, until)
         signals = [
             {
                 "group": {c: p[c] for c in self.group_by},
                 "ts": p["ts"],
                 "value": p["value"],
-                "rules": [r for r in ("rule1", "rule2") if p[r]],
+                "rules": [r for r in rules if p[r]],
                 "center": p["center"],
                 "lnpl": p["lnpl"],
                 "unpl": p["unpl"],
             }
             for p in points
-            if p["rule1"] or p["rule2"]
+            if any(p[r] for r in rules)
         ]
         return Report(
             ok=not signals,
@@ -224,6 +233,34 @@ class Limits:
             until=until,
             signals=signals,
         )
+
+    def chart(
+        self,
+        group: dict[str, str] | tuple[str, ...],
+        out: str | Path,
+        source: Source | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        mr_rule: bool = False,
+    ) -> Path:
+        """Render the XmR pair (X chart + mR chart) for one group to a file.
+
+        By default the chart starts at the baseline window so readers can
+        see the limits' provenance (the shaded region they were frozen from).
+        """
+        from duck_spc import chart as chart_mod
+
+        key = group if isinstance(group, dict) else dict(zip(self.group_by, group, strict=True))
+        entry = next((g for g in self.groups if g["key"] == key), None)
+        if entry is None:
+            known = [g["key"] for g in self.groups]
+            raise ValueError(f"no limits for group {key!r}; known: {known}")
+        points = [
+            p
+            for p in self.evaluate(source, since or self.baseline_window[0], until)
+            if all(p[c] == v for c, v in key.items())
+        ]
+        return chart_mod.render_xmr(self, entry, points, Path(out), mr_rule=mr_rule)
 
 
 @dataclasses.dataclass

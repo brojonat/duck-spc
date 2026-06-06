@@ -25,6 +25,7 @@ VARIANCE_GROUP = {"region": "eu-west", "service": "checkout"}
 CLEAN_GROUP = {"region": "eu-west", "service": "search"}
 SPIKE_DAY = "2026-02-10"
 SHIFT_DAY = "2026-02-05"
+VARIANCE_DAY = "2026-02-15"
 
 
 @pytest.fixture(scope="session")

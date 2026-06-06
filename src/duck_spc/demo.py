@@ -45,6 +45,10 @@ def main() -> int:
            if report.ok
            else f"{len(report.signals)} signal points — the process changed.")
     )
+
+    png = limits.chart(("us-east", "checkout"), OUT / "spike.png")
+    say(f"XmR chart pair for the spiked group -> {png}")
+
     print(report.to_json(indent=2))
     return 0
 

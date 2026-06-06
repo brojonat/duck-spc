@@ -19,12 +19,12 @@
 - [x] Tests: SQL results vs numpy reference impl (from the SPC skill) on the
       synthetic data; rule hits match injected signals exactly
 - [x] `make demo`: generate → baseline → check end-to-end
-- [ ] CLI: `baseline` / `check` / `chart` verbs; JSON stdout, status stderr,
+- [x] CLI: `baseline` / `check` / `chart` verbs; JSON stdout, status stderr,
       exit 0/1/2; `duck-spc` entry point in pyproject
-- [ ] Charts: X + mR pair, baseline window shaded, signals in red
-      (`Limits.chart`, add matplotlib dep); wire a chart into `make demo`
-- [ ] mR-chart rule (moving range above mR_UCL) so the injected variance
-      signal in the test fixture is detectable, then assert on it
+- [x] Charts: X + mR pair, baseline window shaded, signals in red
+      (`Limits.chart`); wired into `make demo` (demo_data/spike.png)
+- [x] mR-chart rule (moving range above mR_UCL), opt-in via
+      `check(mr_rule=True)` / `--mr-rule`; variance x3 fixture asserted
 
 ## Presentation
 - [x] marimo story notebook (`notebooks/trust_the_limits.py`): d2 derivation,
