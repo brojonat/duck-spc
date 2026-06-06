@@ -49,40 +49,109 @@ straight face and a paper trail.
   charting. Deriving a stationary stream changes *what* you chart, not the
   values' integrity.
 
-## CLI
+## Quickstart: the happy path
+
+duck-spc speaks Parquet with one column contract:
+`(ts, <categorical group-by columns…>, value[, exposure])`. Get your data
+into that shape (joins, unit conversion, normalization inputs are your job),
+and everything below follows.
+
+### 0. Kick the tires — sixty seconds, no data required
 
 ```bash
-# 0. Just exploring? One shot — point it at a bucket, BOOM, ASCII XmR
-#    charts and per-group verdicts in your face (exit code = the verdict).
-#    Baseline defaults to the first 25% of the data; --window to control.
+make setup        # uv sync
+make demo         # writes synthetic telemetry (with planted signals) to demo_data/
+
+uv run duck-spc look --source demo_data \
+  --value value --group-by region,service --derive day:mean
+```
+
+BOOM — one ASCII XmR chart per group, planted signals caught red-handed:
+
+```
+── region=us-east, service=checkout ────────────────────────────
+                          ●
+ 335.2 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  UNPL
+            ·    ·    ·          ·      ·     ··   ·  ·
+ 331.1 ──·──··─·───··──·──··──·───··─·───··──·───·──··──── X̄
+       · ·    ·   ·   ·  ·   ··  ·   · ·    ·   ·    ·
+ 326.9 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  LNPL
+       2026-01-01 ── dim = baseline, checked from 2026-01-29 ──
+ ✗ 1 signal point(s) — first 2026-02-10 (rule1)
+
+2/4 group(s) show special-cause variation — go find the cause(s).
+```
+
+The exit code *is* the verdict: `0` all stable, `1` signals, `2` error.
+Baseline points render dim, checked points blue, signals red.
+
+### 1. Point it at your bucket
+
+```bash
 duck-spc look --source 's3://my-bucket/events/' \
   --value latency_ms --group-by region,service --derive day:p95
+```
 
-# Pipe-friendly visualization: both artifacts and reports render
-#    (check reports embed their limits, so the pipe just works)
-duck-spc check --limits limits.json | duck-spc visualize
-duck-spc baseline --source ... --window ... | duck-spc visualize
-duck-spc visualize limits.json
+`look` freezes a baseline from the **first 25% of the data** (it tells you
+the window on stderr — pass `--window START:END` to choose deliberately),
+checks everything after it, and puts the charts in your face. When you want
+the data instead of the picture: `--json` for the report, `-o limits.json`
+to keep the limits artifact it computed.
 
-# 1. Compute frozen limits from a baseline window (writes JSON to stdout)
+### 2. Graduate: freeze limits on purpose
+
+Exploration done, baseline understood — now freeze it from a known-good
+window and keep the artifact. This is the moment the limits stop being
+exploratory and start being *the voice of the process*:
+
+```bash
 duck-spc baseline \
   --source 's3://my-bucket/events/' \
   --ts ts --value latency_ms \
   --group-by region,service \
   --derive day:p95 \
   --window 2026-01-01:2026-01-29 \
-  > limits.json
-
-# 2. Check new data against the frozen limits
-duck-spc check --limits limits.json --since 2026-06-01
-# → JSON signal report on stdout
-# → exit 0: all streams within natural limits ("stop worrying")
-# → exit 1: signals detected (Rule 1 / Rule 2 hits, per group)
-# → exit 2: error
-
-# 3. Render the classic XmR chart pair for one stream
-duck-spc chart --limits limits.json --group us-east,checkout -o chart.png
+  > limits.json        # commit this — it carries its own provenance
 ```
+
+### 3. Check on a schedule
+
+```bash
+# cron / CI / alert hook — quiet by default, the exit code does the talking
+duck-spc check --limits limits.json
+
+# a human investigating? pipe the same report into charts
+duck-spc check --limits limits.json | duck-spc visualize
+```
+
+Reports embed the limits they were checked against, so the pipe Just Works —
+and any saved report remains visualizable later, source intact.
+
+### 4. When it fires
+
+```bash
+duck-spc chart --limits limits.json --group us-east,checkout -o incident.png
+```
+
+Rule 1 (point outside the limits) or Rule 2 (run of 9 one side of center):
+the process changed — go find the assignable cause. And when you've fixed
+it (or made a deliberate improvement the chart confirms), **re-baseline by
+re-running `baseline` over a new window**. Never automatically; frozen
+limits that quietly re-fit themselves are how charts go blind.
+
+## Command reference
+
+| Verb | Does | stdout | Exit code |
+|---|---|---|---|
+| `look` | one-shot: baseline + check + ASCII charts | charts (or `--json` report) | 0 stable / 1 signals / 2 error |
+| `baseline` | freeze per-group limits from a window | limits artifact JSON | 0 / 2 |
+| `check` | score data against frozen limits | report JSON (embeds limits) | 0 stable / 1 signals / 2 error |
+| `visualize` | ASCII charts from artifact/report (stdin or FILE) | charts | 0 stable / 1 signals / 2 error |
+| `chart` | render the X + mR pair for one group | — (writes image) | 0 / 2 |
+
+All verbs put human narrative on **stderr** and machine-readable output on
+**stdout**, so every command pipes. `--mr-rule` (on `look`/`check`/
+`visualize`/`chart`) opts into the spread-change rule.
 
 `--source` accepts anything DuckDB can read: local globs,
 `s3://bucket/prefix/` (hive-partitioned by date), `gs://`, `az://`.
@@ -124,19 +193,19 @@ src = Source(
 
 # Derive the stationary stream, then freeze limits from a baseline window
 stream = src.derive("day:p95")
-limits = stream.baseline("2026-01-01", "2026-01-28")
+limits = stream.baseline("2026-01-01", "2026-01-29")   # half-open [start, end)
 limits.save("limits.json")
 
 # Later (different process, different month): check against frozen limits
 limits = Limits.load("limits.json")
-report = limits.check(src, since="2026-06-01")
+report = limits.check(src, since="2026-06-01")         # mr_rule=True to opt in
 
 report.ok            # True → trust the statistics, go back to sleep
-report.signals       # [{group, rule, ts, value, ...}] when not ok
+report.signals       # [{group, rules, ts, value, ...}] when not ok
 report.to_json()
 
 # Charts (matplotlib): X chart + mR chart, baseline window shaded
-limits.chart(src, group=("us-east", "checkout"), out="chart.png")
+limits.chart(("us-east", "checkout"), "chart.png", source=src)
 ```
 
 ## The limits artifact
@@ -188,7 +257,7 @@ make help        # list all targets
 make setup       # uv sync
 make test        # pytest
 make lint        # ruff + ty
-make demo        # generate synthetic parquet + run baseline/check end-to-end
+make demo        # synthetic parquet -> baseline -> check -> chart, end to end
 ```
 
 Python ≥3.12, managed with `uv`. Core deps: `duckdb`, `numpy` (verification

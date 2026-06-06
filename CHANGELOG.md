@@ -52,6 +52,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- README restructured around the happy path: a Quickstart walkthrough
+  (kick the tires on `make demo` data → `look` at your bucket → freeze
+  limits deliberately → `check` on a schedule → investigate via
+  `visualize`/`chart`), plus a command-reference table with the
+  stdout/exit-code contract per verb. Library examples synced to the real
+  API (half-open windows, `Limits.chart` signature).
 - README artifact format: `groups` is a list with explicit `key` maps
   (comma-joined keys would corrupt on categorical values containing commas);
   baseline windows documented as half-open `[start, end)`.
