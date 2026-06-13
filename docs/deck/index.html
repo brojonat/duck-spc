@@ -97,7 +97,6 @@
 
 <!-- ============================ 2 · the 3am problem ============================ -->
 <section class="slide" data-id="problem">
-  <span class="stub">ANIM STUB</span>
   <!-- TODO(anim): pager/siren vignette — dashboard line jitters, threshold pages,
        human wakes up, it was nothing. d3 + CSS keyframes. -->
   <h2>The 3am problem</h2>
@@ -147,7 +146,6 @@
 
 <!-- ============================ 5 · the XmR chart ============================ -->
 <section class="slide" data-id="xmr">
-  <span class="stub">ANIM STUB</span>
   <!-- TODO(anim): draw the limits left-to-right as they're "computed" from the
        baseline window, then stream the remaining points in and pop the spike. -->
   <h2>The XmR chart: the whole machine</h2>
@@ -221,6 +219,8 @@ UNPL = X̄ + <span class="k">2.66</span>·mR̄       LNPL = X̄ − <span class=
   <ul>
     <li><strong class="danger">Rolling limits absorb every anomaly into the
         baseline.</strong> The chart adapts to the disease and stops reporting it.</li>
+    <li>And the window length is just one more arbitrary knob to pick and
+        babysit forever — there's no defensible value.</li>
     <li>Re-baseline only on a verified process change — a human act, with
         provenance. duck-spc encodes this: limits are a saved artifact that
         records its own baseline window, and <code>check</code> never recomputes.</li>
