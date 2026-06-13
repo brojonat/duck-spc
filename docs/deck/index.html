@@ -94,14 +94,28 @@
   .cols { display: flex; gap: 3rem; align-items: flex-start; }
   .cols > div { flex: 1; min-width: 0; }
 
-  /* phones: smaller type, and side padding that clears the nav buttons */
+  /* phones: stack columns, let tall slides scroll instead of clipping, and
+     move the nav to a bottom bar so it never overlaps content */
   @media (max-width: 760px) {
     body { font-size: 16px; }
-    .slide { padding: 7vh 64px; }
-    h1 { font-size: 2rem; } h2 { font-size: 1.5rem; }
-    .huge { font-size: 2.4rem; } .big { font-size: 1.05rem; }
+    .slide {
+      padding: 4vh 22px 86px; justify-content: flex-start;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+    h1 { font-size: 1.9rem; } h2 { font-size: 1.4rem; margin-bottom: .8rem; }
+    h3 { font-size: 1.05rem; }
+    .huge { font-size: 2.1rem; } .big { font-size: 1.02rem; }
+    p, li { line-height: 1.45; } li { margin: .35em 0; }
     .cols { flex-direction: column; gap: 1rem; }
-    pre { font-size: .72em; }
+    pre { font-size: .7em; }
+    table { font-size: .85em; }
+    th, td { padding: .4em .7em .4em 0; }
+    .hint { display: none; }
+    .footer { left: 0; right: 0; text-align: center; bottom: 26px; }
+    .navbtn {
+      top: auto; bottom: 12px; transform: none; opacity: 1;
+      width: 48px; height: 48px; background: rgba(76,155,232,0.2);
+    }
   }
 </style>
 </head>
@@ -353,11 +367,14 @@ addEventListener("keydown", e => {
   else if (e.key === "f") document.fullscreenElement
     ? document.exitFullscreen() : document.documentElement.requestFullscreen();
 });
-// tap/click advances, except on links, code, and the nav buttons. A swipe can
-// also synthesize a trailing click — suppress it so we don't advance twice.
+// On a mouse, tap/click advances (except on links, code, the nav buttons).
+// On touch, navigation is swipe + buttons only — so scrolling a tall slide
+// never advances by accident. A swipe can also synthesize a trailing click;
+// suppress that so we don't advance twice.
+const coarsePointer = matchMedia("(pointer: coarse)").matches;
 let swipedAt = 0;
 addEventListener("click", e => {
-  if (e.timeStamp - swipedAt < 500) return;
+  if (coarsePointer || e.timeStamp - swipedAt < 500) return;
   if (!e.target.closest("a, pre, .navbtn")) show(current + 1);
 });
 document.getElementById("navPrev").addEventListener("click", e => { e.stopPropagation(); show(current - 1); });
@@ -479,7 +496,12 @@ function makeWiggle(container, { height, n = 70, title = false }) {
       // the lively stream on desktop where it's smooth.
       const still = matchMedia("(max-width: 760px)").matches
         || matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (still) return;
+      if (still) {
+        // fill the full width so the static chart isn't half-empty
+        while (data.length < n) data.push(100 + 6 * gaussian(rand));
+        redraw();
+        return;
+      }
       timer = setInterval(() => {
         // stable forever: same μ, same σ. nothing is happening, on purpose.
         data.push(100 + 6 * gaussian(rand));
@@ -543,28 +565,29 @@ hooks["gauntlet"] = {
   enter() {
     const sel = "#viz-gauntlet";
     d3.select(sel).selectAll("*").remove();
+    const mobile = matchMedia("(max-width: 760px)").matches;
     const rows = [
-      { name: "uniform", rate: 0.03 },
-      { name: "bimodal mixture", rate: 0.04 },
-      { name: "normal", rate: 0.81 },
-      { name: "exponential (skewed)", rate: 3.43 },
-      { name: "lognormal (heavy tail)", rate: 4.49 },
-      { name: "pareto α=2.5 (very heavy tail)", rate: 4.80 },
+      { name: "uniform", short: "uniform", rate: 0.03 },
+      { name: "bimodal mixture", short: "bimodal", rate: 0.04 },
+      { name: "normal", short: "normal", rate: 0.81 },
+      { name: "exponential (skewed)", short: "exponential", rate: 3.43 },
+      { name: "lognormal (heavy tail)", short: "lognormal", rate: 4.49 },
+      { name: "pareto α=2.5 (very heavy tail)", short: "pareto α=2.5", rate: 4.80 },
     ];
     const refs = [
-      { v: 100 / 9, label: "Chebyshev worst case 11.1%", color: "#e85d5d" },
-      { v: 400 / 81, label: "unimodal bound 4.9%", color: "#e8a33d" },
-      { v: 0.27, label: "normal 0.27%", color: "#5dc78a" },
+      { v: 100 / 9, label: "Chebyshev worst case 11.1%", short: "Chebyshev 11.1%", color: "#e85d5d" },
+      { v: 400 / 81, label: "unimodal bound 4.9%", short: "unimodal 4.9%", color: "#e8a33d" },
+      { v: 0.27, label: "normal 0.27%", short: "0.27%", color: "#5dc78a" },
     ];
-    const height = 300, margin = { t: 30, r: 40, b: 34, l: 250 };
-    const { svg, width } = lineChart(sel, { height, margin });
+    const height = 300, margin = { t: 30, r: mobile ? 22 : 40, b: 34, l: mobile ? 92 : 250 };
+    const { svg, width } = lineChart(sel, { height, margin, width: mobile ? innerWidth - 44 : undefined });
     const x = d3.scaleLinear().domain([0, 12.5]).range([margin.l, width - margin.r]);
     const y = d3.scaleBand().domain(rows.map(d => d.name))
       .range([margin.t, height - margin.b]).padding(0.32);
 
     svg.append("g").attr("class", "axis")
       .attr("transform", `translate(0,${height - margin.b})`)
-      .call(d3.axisBottom(x).ticks(6).tickFormat(d => d + "%"));
+      .call(d3.axisBottom(x).ticks(mobile ? 4 : 6).tickFormat(d => d + "%"));
 
     svg.selectAll(".bar").data(rows).join("rect")
       .attr("x", x(0)).attr("y", d => y(d.name))
@@ -574,12 +597,12 @@ hooks["gauntlet"] = {
       .transition().duration(700).delay((d, i) => i * 90)
       .attr("width", d => x(d.rate) - x(0));
     svg.selectAll(".name").data(rows).join("text")
-      .attr("x", margin.l - 10).attr("y", d => y(d.name) + y.bandwidth() / 2 + 4)
-      .attr("text-anchor", "end").attr("fill", "#e6e8ee").attr("font-size", 13)
-      .text(d => d.name);
+      .attr("x", margin.l - 8).attr("y", d => y(d.name) + y.bandwidth() / 2 + 4)
+      .attr("text-anchor", "end").attr("fill", "#e6e8ee").attr("font-size", mobile ? 11 : 13)
+      .text(d => mobile ? d.short : d.name);
     svg.selectAll(".val").data(rows).join("text")
-      .attr("x", d => x(d.rate) + 7).attr("y", d => y(d.name) + y.bandwidth() / 2 + 4)
-      .attr("fill", "#8b93a5").attr("font-size", 12).attr("font-family", "var(--mono)")
+      .attr("x", d => x(d.rate) + 6).attr("y", d => y(d.name) + y.bandwidth() / 2 + 4)
+      .attr("fill", "#8b93a5").attr("font-size", mobile ? 10 : 12).attr("font-family", "var(--mono)")
       .attr("opacity", 0)
       .text(d => d.rate.toFixed(2) + "%")
       .transition().delay((d, i) => 700 + i * 90).attr("opacity", 1);
@@ -588,9 +611,17 @@ hooks["gauntlet"] = {
       svg.append("line").attr("x1", x(r.v)).attr("x2", x(r.v))
         .attr("y1", margin.t - 4).attr("y2", height - margin.b)
         .attr("stroke", r.color).attr("stroke-dasharray", "5,4").attr("stroke-width", 1.2);
-      svg.append("text").attr("x", x(r.v)).attr("y", margin.t - 10)
-        .attr("fill", r.color).attr("font-size", 11).attr("text-anchor", "middle")
-        .text(r.label);
+      if (mobile) {
+        // run the label vertically along its line so the three never collide
+        svg.append("text")
+          .attr("transform", `translate(${x(r.v) - 3}, ${(margin.t + height - margin.b) / 2}) rotate(-90)`)
+          .attr("fill", r.color).attr("font-size", 9.5).attr("text-anchor", "middle")
+          .attr("font-family", "var(--mono)").text(r.short);
+      } else {
+        svg.append("text").attr("x", x(r.v)).attr("y", margin.t - 10)
+          .attr("fill", r.color).attr("font-size", 11).attr("text-anchor", "middle")
+          .text(r.label);
+      }
     }
   },
 };
@@ -611,8 +642,12 @@ hooks["sdtrap"] = {
     const naive = { center: mean, lnpl: mean - 3 * sd, unpl: mean + 3 * sd };
     const mr = xmrLimits(data);   // mR̄-based limits from the same contaminated data
 
-    const panelW = Math.min(440, innerWidth * 0.38), height = 250;
-    const wrap = d3.select(sel).style("display", "flex").style("gap", "2rem");
+    const mobile = matchMedia("(max-width: 760px)").matches;
+    const panelW = mobile ? Math.min(440, innerWidth - 56) : Math.min(440, innerWidth * 0.38);
+    const height = mobile ? 180 : 250;
+    const wrap = d3.select(sel).style("display", "flex")
+      .style("flex-direction", mobile ? "column" : "row")
+      .style("gap", mobile ? "1.1rem" : "2rem");
     for (const [lim, title, titleColor] of [
       [naive, "mean ± 3·std(data) — blind", "#e85d5d"],
       [mr, "± 2.66·mR̄ — sees it", "#5dc78a"]]) {
@@ -687,7 +722,8 @@ hooks["bounds"] = {
     const YCLAMP = 0.62;   // exponential/pareto spike past this; the tail % is exact regardless
     const arr = dists.map(d => GRID.map(x => Math.min(d.f(x), YCLAMP)));
 
-    const height = 250, margin = { t: 16, r: 18, b: 28, l: 18 };
+    const height = matchMedia("(max-width: 760px)").matches ? 210 : 250;
+    const margin = { t: 16, r: 18, b: 28, l: 18 };
     const { svg, width } = lineChart(sel, { height, margin });
     const x = d3.scaleLinear().domain([-4.5, 4.5]).range([margin.l, width - margin.r]);
     const y = d3.scaleLinear().domain([0, 0.66]).range([height - margin.b, margin.t]);
@@ -764,8 +800,12 @@ hooks["freeze"] = {
       const w = full.slice(Math.max(0, i - K + 1), i + 1);
       return xmrLimits(w.length >= 2 ? w : full.slice(0, 2));
     });
-    const panelW = Math.min(440, innerWidth * 0.38), height = 240;
-    const wrap = d3.select(sel).style("display", "flex").style("gap", "2rem");
+    const mobile = matchMedia("(max-width: 760px)").matches;
+    const panelW = mobile ? Math.min(440, innerWidth - 56) : Math.min(440, innerWidth * 0.38);
+    const height = mobile ? 180 : 240;
+    const wrap = d3.select(sel).style("display", "flex")
+      .style("flex-direction", mobile ? "column" : "row")
+      .style("gap", mobile ? "1.1rem" : "2rem");
     const panels = [
       { title: "frozen limits — keeps firing", color: "#5dc78a", rolling: false },
       { title: "rolling limits — goes blind", color: "#e85d5d", rolling: true },
