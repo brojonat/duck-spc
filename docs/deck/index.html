@@ -158,9 +158,6 @@ UNPL = X̄ + <span class="k">2.66</span>·mR̄       LNPL = X̄ − <span class=
 
 <!-- ============================ 6 · where 2.66 comes from ============================ -->
 <section class="slide" data-id="constant">
-  <span class="stub">ANIM STUB</span>
-  <!-- TODO(anim): animated derivation — |xᵢ−xᵢ₋₁| brackets appear between
-       consecutive points, average into mR̄, divide by 1.128, fan out to ±3σ̂. -->
   <h2>Where 2.66 comes from</h2>
   <p class="huge" style="font-family:var(--mono)">2.66 = 3 / 1.128</p>
   <ul class="big">
@@ -177,13 +174,13 @@ UNPL = X̄ + <span class="k">2.66</span>·mR̄       LNPL = X̄ − <span class=
 
 <!-- ============================ 7 · but my data isn't normal ============================ -->
 <section class="slide" data-id="bounds">
-  <span class="stub">ANIM STUB</span>
-  <!-- TODO(anim): a distribution morphs (normal → lognormal → bimodal → pareto)
-       while the ±3σ region stays shaded and the tail-mass counter barely moves.
-       This is the centerpiece animation if we build one. -->
   <h2>“But my data isn’t normal!”</h2>
-  <p class="big">Nothing so far assumed it was. Suppose the <em>worst</em>:</p>
-  <table class="big">
+  <p>Nothing so far assumed it was. Every distribution below is standardized to
+     the same mean and variance — so the <span class="danger">±3σ lines never
+     move</span>. Watch the shape go pathological while the red tail past 3σ
+     stays tiny.</p>
+  <div class="viz" id="viz-bounds"></div>
+  <table>
     <tr><th>What you're willing to assume</th><th>P(stable point beyond 3σ)</th></tr>
     <tr><td><strong>Nothing at all</strong> (finite variance) — Chebyshev</td>
         <td class="danger" style="font-family:var(--mono)">≤ 1/9 ≈ 11.1%</td></tr>
@@ -192,9 +189,6 @@ UNPL = X̄ + <span class="k">2.66</span>·mR̄       LNPL = X̄ − <span class=
     <tr><td>Normal (the familiar case)</td>
         <td class="ok" style="font-family:var(--mono)">0.27%</td></tr>
   </table>
-  <p>Even against a distribution <strong>designed by an adversary</strong>, 3-sigma
-     limits alarm on at most one stable point in nine. One weak, checkable
-     assumption — one hump — and the ceiling drops below 5%.</p>
 </section>
 
 <!-- ============================ 8 · the gauntlet ============================ -->
@@ -211,9 +205,6 @@ UNPL = X̄ + <span class="k">2.66</span>·mR̄       LNPL = X̄ − <span class=
 
 <!-- ============================ 9 · why mR̄, not std(data) ============================ -->
 <section class="slide" data-id="sdtrap">
-  <span class="stub">ANIM STUB</span>
-  <!-- TODO(anim): start both panels identical & stable; inject the shift live and
-       watch the right panel's SD limits inflate to swallow it while mR̄ holds. -->
   <h2>The trick: sigma from the <em>moving range</em></h2>
   <p>Same data, same 3-sigma shift. The global SD is inflated by the very signal
      you're hunting — its limits swell until the chart goes blind.
@@ -223,20 +214,17 @@ UNPL = X̄ + <span class="k">2.66</span>·mR̄       LNPL = X̄ − <span class=
 
 <!-- ============================ 10 · freeze the limits ============================ -->
 <section class="slide" data-id="freeze">
-  <span class="stub">ANIM STUB</span>
-  <!-- TODO(anim): a rolling-window chart chasing an anomaly — limits absorb the
-       shift over a few frames and the alarm goes quiet; frozen panel keeps firing. -->
   <h2>Compute once. Freeze. Extend forever.</h2>
-  <ul class="big">
-    <li>A stable process is <em>exactly</em> one where next month looks like the
-        baseline — so the limits don't expire.</li>
+  <p>Same shift hits both charts. The frozen limits keep firing; the rolling
+     window quietly swallows the shift into its own baseline and goes blind.</p>
+  <div class="viz" id="viz-freeze"></div>
+  <ul>
     <li><strong class="danger">Rolling limits absorb every anomaly into the
         baseline.</strong> The chart adapts to the disease and stops reporting it.</li>
-    <li>Re-baseline only on a verified process change — found-and-removed cause, or
-        a deliberate improvement the chart confirms. A human act, with provenance.</li>
+    <li>Re-baseline only on a verified process change — a human act, with
+        provenance. duck-spc encodes this: limits are a saved artifact that
+        records its own baseline window, and <code>check</code> never recomputes.</li>
   </ul>
-  <p class="muted">duck-spc encodes this: limits are a saved artifact that records
-     its own baseline window. <code>check</code> never recomputes.</p>
 </section>
 
 <!-- ============================ 11 · two rules ============================ -->
@@ -591,6 +579,188 @@ hooks["sdtrap"] = {
         .attr("fill", d => (d > lim.unpl || d < lim.lnpl) ? "#e85d5d" : "#4c9be8");
     }
   },
+};
+
+/* ============================================================
+   Slide 7: the distribution morph — the centerpiece.
+   Every distribution is standardized to mean 0, variance 1, so
+   the ±3σ lines are fixed at x = ±3. The shape writhes; the red
+   tail mass beyond ±3σ stays tiny. The % shown is the analytic
+   *true* tail of each distribution — distinct from the gauntlet
+   slide's measured false-alarm rate, which also pays mR̄
+   estimation error from a finite baseline.
+   ============================================================ */
+hooks["bounds"] = {
+  enter() {
+    const sel = "#viz-bounds";
+    d3.select(sel).selectAll("*").remove();
+    const S3 = Math.sqrt(3);
+    const phi = z => Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI);
+    const ln = { s: 0.7 };
+    ln.mean = Math.exp(ln.s * ln.s / 2);
+    ln.sd = Math.sqrt((Math.exp(ln.s * ln.s) - 1) * Math.exp(ln.s * ln.s));
+    const par = { a: 2.5 };
+    par.mean = 1 / (par.a - 1);
+    par.sd = Math.sqrt(par.a / ((par.a - 1) ** 2 * (par.a - 2)));
+    const bi = { a: 0.9 };
+    bi.s = Math.sqrt(1 - bi.a * bi.a);
+
+    // standardized densities f_x(x) = f_t(μ + σx)·σ  (mean 0, var 1)
+    const dists = [
+      { name: "Normal", tail: 0.27, f: x => phi(x) },
+      { name: "Uniform", tail: 0.0, f: x => Math.abs(x) < S3 ? 1 / (2 * S3) : 0 },
+      { name: "Exponential", tail: 1.83, f: x => x >= -1 ? Math.exp(-(x + 1)) : 0 },
+      { name: "Lognormal", tail: 1.82, f: x => {
+          const t = ln.mean + ln.sd * x;
+          return t > 0
+            ? (1 / (t * ln.s * Math.sqrt(2 * Math.PI)))
+              * Math.exp(-(Math.log(t) ** 2) / (2 * ln.s * ln.s)) * ln.sd
+            : 0;
+        } },
+      { name: "Bimodal", tail: 0.0,
+        f: x => 0.5 * (phi((x + bi.a) / bi.s) + phi((x - bi.a) / bi.s)) / bi.s },
+      { name: "Pareto α=2.5", tail: 1.07, f: x => {
+          const t = par.mean + par.sd * x;
+          return t > 0 ? par.a / (1 + t) ** (par.a + 1) * par.sd : 0;
+        } },
+    ];
+    const GRID = d3.range(-4.5, 4.5001, 0.045);
+    const YCLAMP = 0.62;   // exponential/pareto spike past this; the tail % is exact regardless
+    const arr = dists.map(d => GRID.map(x => Math.min(d.f(x), YCLAMP)));
+
+    const height = 250, margin = { t: 16, r: 18, b: 28, l: 18 };
+    const { svg, width } = lineChart(sel, { height, margin });
+    const x = d3.scaleLinear().domain([-4.5, 4.5]).range([margin.l, width - margin.r]);
+    const y = d3.scaleLinear().domain([0, 0.66]).range([height - margin.b, margin.t]);
+
+    svg.append("line").attr("x1", x(0)).attr("x2", x(0))
+      .attr("y1", margin.t).attr("y2", height - margin.b)
+      .attr("stroke", "#3a4256").attr("stroke-width", 1);
+    for (const xv of [-3, 3]) {
+      svg.append("line").attr("x1", x(xv)).attr("x2", x(xv))
+        .attr("y1", margin.t).attr("y2", height - margin.b)
+        .attr("stroke", "#e85d5d").attr("stroke-dasharray", "5,4").attr("stroke-width", 1.2);
+      svg.append("text").attr("x", x(xv)).attr("y", height - margin.b + 18)
+        .attr("fill", "#e85d5d").attr("font-size", 11).attr("text-anchor", "middle")
+        .attr("font-family", "var(--mono)").text((xv < 0 ? "−" : "+") + "3σ");
+    }
+
+    const area = d3.area().x((d, i) => x(GRID[i])).y0(y(0)).y1(d => y(d)).curve(d3.curveBasis);
+    const tailArea = d3.area().defined((d, i) => Math.abs(GRID[i]) >= 3)
+      .x((d, i) => x(GRID[i])).y0(y(0)).y1(d => y(d)).curve(d3.curveBasis);
+    const bulk = svg.append("path").attr("fill", "#4c9be8").attr("fill-opacity", 0.16)
+      .attr("stroke", "#4c9be8").attr("stroke-width", 1.6);
+    const tail = svg.append("path").attr("fill", "#e85d5d").attr("fill-opacity", 0.6);
+
+    const nameText = svg.append("text").attr("x", width - margin.r).attr("y", margin.t + 18)
+      .attr("text-anchor", "end").attr("fill", "#e6e8ee").attr("font-size", 18)
+      .attr("font-weight", 600);
+    const tailText = svg.append("text").attr("x", width - margin.r).attr("y", margin.t + 42)
+      .attr("text-anchor", "end").attr("fill", "#e85d5d").attr("font-size", 15)
+      .attr("font-family", "var(--mono)");
+    svg.append("text").attr("x", width - margin.r).attr("y", margin.t + 58)
+      .attr("text-anchor", "end").attr("fill", "#8b93a5").attr("font-size", 10)
+      .text("true mass beyond ±3σ");
+
+    const HOLD = 900, MORPH = 1500, SEG = HOLD + MORPH, N = dists.length, T = SEG * N;
+    const ease = d3.easeCubicInOut;
+    let raf = null, t0 = null;
+    const tick = now => {
+      if (t0 === null) t0 = now;
+      const t = (now - t0) % T;
+      const i = Math.floor(t / SEG), j = (i + 1) % N, w = t - i * SEG;
+      const e = w < HOLD ? 0 : ease((w - HOLD) / MORPH);
+      const cur = arr[i].map((v, k) => v * (1 - e) + arr[j][k] * e);
+      const tv = dists[i].tail * (1 - e) + dists[j].tail * e;
+      bulk.datum(cur).attr("d", area);
+      tail.datum(cur).attr("d", tailArea);
+      nameText.text(e < 0.5 ? dists[i].name : dists[j].name);
+      tailText.text("P(|x| > 3σ) = " + tv.toFixed(2) + "%");
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    this.__cancel = () => cancelAnimationFrame(raf);
+  },
+  leave() { this.__cancel && this.__cancel(); },
+};
+
+/* ============================================================
+   Slide 10: frozen vs rolling limits, streaming. Same shift hits
+   both. Frozen keeps flagging; the rolling window's center and
+   limits creep up to absorb the new level and the alarm goes
+   quiet — the chart adapts to the disease.
+   ============================================================ */
+hooks["freeze"] = {
+  enter() {
+    const sel = "#viz-freeze";
+    d3.select(sel).selectAll("*").remove();
+    const rand = mulberry32(9);
+    const full = d3.range(64).map(i => (i < 28 ? 100 : 117) + 4.5 * gaussian(rand));
+    const frozen = xmrLimits(full.slice(0, 24));   // frozen from the clean baseline
+    const K = 20;                                  // rolling window length
+    // each point scored against the trailing window ending at it — so the
+    // rolling band rises to swallow the shift, rather than the whole history
+    // being judged against one drifted set of limits.
+    const roll = full.map((_, i) => {
+      const w = full.slice(Math.max(0, i - K + 1), i + 1);
+      return xmrLimits(w.length >= 2 ? w : full.slice(0, 2));
+    });
+    const panelW = Math.min(440, innerWidth * 0.38), height = 240;
+    const wrap = d3.select(sel).style("display", "flex").style("gap", "2rem");
+    const panels = [
+      { title: "frozen limits — keeps firing", color: "#5dc78a", rolling: false },
+      { title: "rolling limits — goes blind", color: "#e85d5d", rolling: true },
+    ].map(p => {
+      const div = wrap.append("div");
+      const svg = div.append("svg").attr("width", panelW).attr("height", height)
+        .attr("viewBox", [0, 0, panelW, height]);
+      const margin = { t: 24, r: 16, b: 12, l: 16 };
+      const sx = d3.scaleLinear().domain([0, 63]).range([margin.l, panelW - margin.r]);
+      const sy = d3.scaleLinear().domain([84, 132]).range([height - margin.b, margin.t]);
+      svg.append("text").attr("x", margin.l).attr("y", 14)
+        .attr("fill", p.color).attr("font-size", 13).text(p.title);
+      const limAt = i => p.rolling ? roll[i] : frozen;
+      return { ...p, svg, sx, sy, limAt };
+    });
+
+    let n = 24, timer = null;
+    const draw = () => {
+      for (const p of panels) {
+        p.svg.selectAll(".dyn").remove();
+        const idx = d3.range(n);
+        for (const key of ["unpl", "center", "lnpl"]) {
+          const dash = key === "center" ? null : "5,4";
+          if (p.rolling) {
+            p.svg.append("path").attr("class", "dyn").datum(idx)
+              .attr("d", d3.line().x(i => p.sx(i)).y(i => p.sy(roll[i][key])))
+              .attr("fill", "none").attr("stroke", "#5a6478").attr("stroke-width", 1)
+              .attr("stroke-dasharray", dash);
+          } else {
+            p.svg.append("line").attr("class", "dyn")
+              .attr("x1", p.sx(0)).attr("x2", p.sx(63))
+              .attr("y1", p.sy(frozen[key])).attr("y2", p.sy(frozen[key]))
+              .attr("stroke", "#5a6478").attr("stroke-width", 1).attr("stroke-dasharray", dash);
+          }
+        }
+        p.svg.append("line").attr("class", "dyn").attr("x1", p.sx(27.5)).attr("x2", p.sx(27.5))
+          .attr("y1", p.sy.range()[1]).attr("y2", p.sy.range()[0])
+          .attr("stroke", "#e8a33d").attr("stroke-dasharray", "2,3").attr("opacity", 0.5);
+        const shown = full.slice(0, n);
+        p.svg.append("path").attr("class", "dyn").datum(shown)
+          .attr("d", d3.line().x((d, i) => p.sx(i)).y(d => p.sy(d)).curve(d3.curveMonotoneX))
+          .attr("fill", "none").attr("stroke", "#4c9be8").attr("stroke-width", 1.2);
+        p.svg.selectAll("circle.dyn").data(shown).enter().append("circle").attr("class", "dyn")
+          .attr("cx", (d, i) => p.sx(i)).attr("cy", d => p.sy(d))
+          .attr("r", (d, i) => (d > p.limAt(i).unpl || d < p.limAt(i).lnpl) ? 4 : 2.2)
+          .attr("fill", (d, i) => (d > p.limAt(i).unpl || d < p.limAt(i).lnpl) ? "#e85d5d" : "#4c9be8");
+      }
+      n = n >= full.length ? 24 : n + 1;
+    };
+    draw();
+    timer = setInterval(draw, 300);
+    this.__cancel = () => clearInterval(timer);
+  },
+  leave() { this.__cancel && this.__cancel(); },
 };
 
 /* boot */
