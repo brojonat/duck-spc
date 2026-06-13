@@ -3,6 +3,23 @@
 Hard-won knowledge. Each entry: *what happened, why it was surprising, how
 to avoid it.*
 
+## A dropped `</style>` silently blanks the whole page
+
+**What happened:** an Edit to the deck's CSS lost the closing `</style>`
+tag. The browser then parsed everything after it — the entire `<body>` —
+as stylesheet text, so the page rendered blank. curl showed the full HTML
+(it doesn't parse), and `document.styleSheets` even reported the CSS rules
+as valid, so nothing looked wrong from the outside.
+
+**Why it was surprising:** the file *looked* complete in a grep, the server
+served correct bytes, and only `document.body.innerHTML.length === 0` in the
+live DOM revealed it. An unterminated tag fails far from where it's noticed.
+
+**How to avoid it:** after any structural HTML/CSS edit, sanity-check the
+rendered DOM, not just the file — `document.body` non-empty, expected node
+counts. `grep -c '</style>'` / matching open-close tag counts catches the
+specific case cheaply.
+
 ## `npx skills add` only sees what's pushed to GitHub
 
 **What happened:** `npx skills add brojonat/llmsrules -s

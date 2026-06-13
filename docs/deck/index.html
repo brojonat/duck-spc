@@ -75,8 +75,34 @@
   .hint { position: fixed; bottom: 14px; left: 20px;
     font: 12px var(--mono); color: var(--muted); z-index: 10; }
 
+  .navbtn {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(76,155,232,0.14); color: var(--fg);
+    border: 1px solid #2a3142; font: 26px/1 var(--mono); padding-bottom: 3px;
+    cursor: pointer; user-select: none; z-index: 20;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .navbtn:active { background: rgba(76,155,232,0.34); }
+  .navbtn.prev { left: 12px; } .navbtn.next { right: 12px; }
+  /* unobtrusive on desktop (keyboard/click work); prominent on touch screens */
+  @media (hover: hover) and (min-width: 760px) {
+    .navbtn { opacity: .3; } .navbtn:hover { opacity: 1; }
+  }
+
   .cols { display: flex; gap: 3rem; align-items: flex-start; }
   .cols > div { flex: 1; min-width: 0; }
+
+  /* phones: smaller type, and side padding that clears the nav buttons */
+  @media (max-width: 760px) {
+    body { font-size: 16px; }
+    .slide { padding: 7vh 64px; }
+    h1 { font-size: 2rem; } h2 { font-size: 1.5rem; }
+    .huge { font-size: 2.4rem; } .big { font-size: 1.05rem; }
+    .cols { flex-direction: column; gap: 1rem; }
+    pre { font-size: .72em; }
+  }
 </style>
 </head>
 <body>
@@ -288,8 +314,11 @@ $ duck-spc check --limits limits.json
   </p>
 </section>
 
+<button class="navbtn prev" id="navPrev" aria-label="Previous slide">‹</button>
+<button class="navbtn next" id="navNext" aria-label="Next slide">›</button>
+
 <div class="footer" id="counter"></div>
-<div class="hint">← → navigate · f fullscreen</div>
+<div class="hint">swipe / tap · ← → · f fullscreen</div>
 
 <script>
 /* ============================================================
@@ -324,7 +353,31 @@ addEventListener("keydown", e => {
   else if (e.key === "f") document.fullscreenElement
     ? document.exitFullscreen() : document.documentElement.requestFullscreen();
 });
-addEventListener("click", e => { if (!e.target.closest("a, pre")) show(current + 1); });
+// tap/click advances, except on links, code, and the nav buttons. A swipe can
+// also synthesize a trailing click — suppress it so we don't advance twice.
+let swipedAt = 0;
+addEventListener("click", e => {
+  if (e.timeStamp - swipedAt < 500) return;
+  if (!e.target.closest("a, pre, .navbtn")) show(current + 1);
+});
+document.getElementById("navPrev").addEventListener("click", e => { e.stopPropagation(); show(current - 1); });
+document.getElementById("navNext").addEventListener("click", e => { e.stopPropagation(); show(current + 1); });
+
+// horizontal swipe: left → next, right → prev (ignore mostly-vertical drags)
+let tx = null, ty = null;
+addEventListener("touchstart", e => {
+  const t = e.changedTouches[0]; tx = t.clientX; ty = t.clientY;
+}, { passive: true });
+addEventListener("touchend", e => {
+  if (tx === null) return;
+  const t = e.changedTouches[0], dx = t.clientX - tx, dy = t.clientY - ty;
+  if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+    swipedAt = e.timeStamp;
+    show(current + (dx < 0 ? 1 : -1));
+  }
+  tx = ty = null;
+}, { passive: true });
+
 addEventListener("hashchange", () => {
   const i = (parseInt(location.hash.slice(1), 10) || 1) - 1;
   if (i !== current) show(i);
@@ -421,6 +474,12 @@ function makeWiggle(container, { height, n = 70, title = false }) {
           .attr("fill", "#4c9be8");
       }
       redraw();
+      // The discrete shift-and-redraw steps visibly on phones; render the
+      // decorative chart static there (and for reduced-motion users), keep
+      // the lively stream on desktop where it's smooth.
+      const still = matchMedia("(max-width: 760px)").matches
+        || matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (still) return;
       timer = setInterval(() => {
         // stable forever: same μ, same σ. nothing is happening, on purpose.
         data.push(100 + 6 * gaussian(rand));
