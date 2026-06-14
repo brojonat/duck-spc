@@ -42,13 +42,12 @@ check-notebook: ## Lint the notebook and run it in script mode
 	uvx marimo check notebooks/trust_the_limits.py
 	uv run --with marimo,numpy,matplotlib python notebooks/trust_the_limits.py
 
-HUGO_SPC ?= ../brojonat-hugo/static/spc
-
-.PHONY: publish-deck
-publish-deck: ## Copy the slide deck into the hugo site's static/ (serves at /spc/)
-	@mkdir -p $(HUGO_SPC)
-	cp docs/deck/index.html $(HUGO_SPC)/index.html
-	@echo "synced deck -> $(HUGO_SPC)/index.html (commit & deploy from the hugo repo)"
+# The brojonat-hugo site vendors this deck from the remote (its `make
+# vendor-deck`), so there's no push-to-sibling target here. Preview locally:
+.PHONY: serve-deck
+serve-deck: ## Preview the slide deck locally at http://localhost:8043
+	@echo "serving docs/deck at http://localhost:8043 (Ctrl-C to stop)"
+	cd docs/deck && python3 -m http.server 8043
 
 .PHONY: skills
 skills: ## (Re)install the pinned agent skills
