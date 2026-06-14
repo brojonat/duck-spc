@@ -3,7 +3,26 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - 2026-06-06
+## [Unreleased] - 2026-06-14
+
+### Added
+
+- Slide deck (`docs/deck/index.html`) gained live d3 animations: the
+  distribution-morph (standardized shapes go pathological while the ±3σ tail
+  mass stays tiny) and a frozen-vs-rolling-limits demo (the rolling band rises
+  to swallow a shift and goes blind).
+- Mobile support for the deck: swipe + on-screen prev/next buttons, two-panel
+  charts stack vertically, responsive gauntlet, bottom nav bar, scrollable
+  slides, static landing chart (no stepping jank).
+
+### Changed
+
+- The deck is now **vendored** into the `brojonat-hugo` site (served at
+  `/spc/`) via that repo's `make vendor-deck`, which git-clones this repo's
+  remote — no sibling checkout or submodule. Documented in the README
+  ("Where the deck is published").
+
+## [0.1.0] - 2026-06-06
 
 ### Added
 

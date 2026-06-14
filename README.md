@@ -245,10 +245,34 @@ distributions* — lives in two artifacts:
   distribution-free bounds (Chebyshev 11.1% / unimodal 4.9% / normal 0.27%),
   and the empirical gauntlet running the full XmR procedure against
   heavy-tailed monsters. Every number in the deck is computed here.
-- **`docs/deck/index.html`** — self-contained HTML slide deck
-  (`make run-deck`, then http://localhost:8042). d3 visuals, keyboard
-  navigation, animation stubs marked `ANIM STUB` / `TODO(anim)` for the
-  fancier sequences we may build later.
+- **`docs/deck/index.html`** — a self-contained HTML slide deck
+  (`make run-deck`, then http://localhost:8042). Dark-themed, mobile-responsive,
+  with keyboard / swipe / on-screen-button navigation and live d3 visuals: a
+  streaming stable process, the XmR anatomy, the false-alarm gauntlet, an
+  SD-vs-mR̄ comparison, a distribution-morph (shapes go pathological while the
+  ±3σ tail mass stays tiny), and a frozen-vs-rolling-limits demo. One file, d3
+  from a CDN, no build step.
+
+### Where the deck is published (vendoring)
+
+`docs/deck/index.html` is the **canonical source**. The blog
+([brojonat.com](https://brojonat.com)) hosts a copy at
+[`/spc/`](https://brojonat.com/spc/), linked from the companion post. That
+copy is **vendored**, not submoduled: the `brojonat-hugo` repo pulls the deck
+from this repo's remote and commits it into its own `static/`.
+
+To refresh the published deck after editing it here:
+
+1. Commit and push the deck change in this repo.
+2. In the `brojonat-hugo` repo, run `make vendor-deck` — it shallow-clones this
+   repo into a temp dir and copies the deck into `static/spc/`. Review the
+   diff, commit, then `make deploy`.
+
+The hugo build uses its committed copy, so deploying never needs this repo
+checked out as a sibling or any network access. (Vendored rather than a git
+submodule on purpose: nothing to `submodule init`, the site stays
+self-contained and builds offline, and diffs show real content instead of a
+commit-pointer bump.)
 
 ## Build / run / test
 
