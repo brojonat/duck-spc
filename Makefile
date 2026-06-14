@@ -43,11 +43,7 @@ check-notebook: ## Lint the notebook and run it in script mode
 	uv run --with marimo,numpy,matplotlib python notebooks/trust_the_limits.py
 
 # The brojonat-hugo site vendors this deck from the remote (its `make
-# vendor-deck`), so there's no push-to-sibling target here. Preview locally:
-.PHONY: serve-deck
-serve-deck: ## Preview the slide deck locally at http://localhost:8043
-	@echo "serving docs/deck at http://localhost:8043 (Ctrl-C to stop)"
-	cd docs/deck && python3 -m http.server 8043
+# vendor-deck`); preview it locally with `make run-deck`.
 
 .PHONY: skills
 skills: ## (Re)install the pinned agent skills
