@@ -17,7 +17,8 @@ import pyarrow as pa
 
 from duck_spc import sql as q
 
-ARTIFACT_VERSION = 1
+ARTIFACT_VERSION = 2  # v2 adds source_sql; v1 artifacts still load
+SUPPORTED_VERSIONS = (1, 2)
 LIMIT_FIELDS = ("n", "center", "mr_bar", "lnpl", "unpl", "mr_ucl")
 
 
@@ -25,25 +26,82 @@ def _connect() -> duckdb.DuckDBPyConnection:
     return duckdb.connect()
 
 
+def _stream_relation(con: duckdb.DuckDBPyConnection, stream: Stream) -> str:
+    """The relation downstream SQL reads the derived stream from.
+
+    Parquet sources inline as a subquery (pushdown, scanned efficiently).
+    Custom-SQL sources are materialized into a temp table first: it runs the
+    user's query once instead of re-nesting it under every downstream window
+    function, which also sidesteps a DuckDB execution error on deeply nested
+    window queries (e.g. a deseasonalizing `avg() OVER` under our `lag()`).
+    """
+    if stream.source.sql is None:
+        return stream.sql()
+    con.execute(f"CREATE TEMP TABLE _spc_stream AS {stream.sql()}")
+    return "SELECT * FROM _spc_stream"
+
+
 @dataclasses.dataclass(frozen=True)
 class Source:
-    """A Parquet dataset with the duck-spc column contract.
+    """A dataset exposing the duck-spc column contract.
 
-    (ts, *group_by, value[, exposure]) — everything upstream of this shape
-    (joins, unit conversion, normalization inputs) is the caller's job.
-    When `exposure` is None it is implicitly 1 for every row.
+    Two ways to provide it:
+
+    - `path=` — Parquet glob/prefix whose columns already *are*
+      `(ts, *group_by, value[, exposure])`. The happy path.
+    - `sql=` — a SQL query (use `Source.from_query`) that *projects* arbitrary
+      Parquet into that shape, for schemas that don't line up. The query names
+      the output columns; `ts`/`value`/`group_by`/`exposure` reference them.
+
+    Everything upstream of the contract (joins, unit conversion, normalization,
+    and — importantly — deseasonalizing/de-trending, see the README) is the
+    caller's job. When `exposure` is None it is implicitly 1 for every row.
     """
 
-    path: str
-    ts: str
-    value: str
-    group_by: tuple[str, ...]
+    path: str | None = None
+    sql: str | None = None
+    ts: str = "ts"
+    value: str = ""
+    group_by: tuple[str, ...] = ()
     exposure: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "group_by", tuple(self.group_by))
         if not self.group_by:
             raise ValueError("group_by must name at least one column")
+        if not self.value:
+            raise ValueError("value column is required")
+        if (self.path is None) == (self.sql is None):
+            raise ValueError(
+                "provide exactly one of path= (Parquet) or sql= "
+                "(use Source.from_query for a custom query)"
+            )
+
+    @classmethod
+    def from_query(
+        cls,
+        sql: str,
+        *,
+        ts: str = "ts",
+        value: str,
+        group_by: list[str] | tuple[str, ...],
+        exposure: str | None = None,
+    ) -> Source:
+        """A Source backed by a SQL query that yields the contract columns.
+
+        The query must SELECT a timestamp column, the group-by column(s), a
+        value column, and optionally an exposure column — named so that the
+        `ts`/`value`/`group_by`/`exposure` arguments reference them. It is
+        self-contained (read your Parquet inside it with `read_parquet(...)`).
+        """
+        return cls(sql=sql, ts=ts, value=value, group_by=tuple(group_by), exposure=exposure)
+
+    def relation(self) -> str:
+        """The DuckDB relation everything else reads from."""
+        if self.sql is not None:
+            return f"({self.sql}) AS _spc_src"
+        assert self.path is not None  # guaranteed by __post_init__
+        return q.source_relation(self.path)
 
     def derive(self, spec: str = "none") -> Stream:
         """Derive the stationary stream to chart (the most important bit)."""
@@ -61,7 +119,7 @@ class Stream:
     def sql(self) -> str:
         s = self.source
         return q.derive_sql(
-            q.source_relation(s.path), s.ts, s.value, s.group_by, self.spec, s.exposure
+            s.relation(), s.ts, s.value, s.group_by, self.spec, s.exposure
         )
 
     def frame(self, since: str | None = None, until: str | None = None) -> list[dict[str, Any]]:
@@ -98,8 +156,10 @@ class Stream:
     def baseline(self, start: str, end: str) -> Limits:
         """Compute frozen per-group XmR limits from the window [start, end)."""
         s = self.source
-        cur = _connect().execute(
-            q.baseline_sql(self.sql(), s.group_by), [str(start), str(end)]
+        con = _connect()
+        relation = _stream_relation(con, self)
+        cur = con.execute(
+            q.baseline_sql(relation, s.group_by), [str(start), str(end)]
         )
         cols = [d[0] for d in cur.description]
         groups = []
@@ -115,6 +175,7 @@ class Stream:
             )
         return Limits(
             source=s.path,
+            source_sql=s.sql,
             ts=s.ts,
             value=s.value,
             exposure=s.exposure,
@@ -134,7 +195,7 @@ class Limits:
     Re-baselining is a deliberate act: build a new Limits, never mutate.
     """
 
-    source: str
+    source: str | None
     ts: str
     value: str
     exposure: str | None
@@ -143,6 +204,7 @@ class Limits:
     baseline_window: tuple[str, str]
     computed_at: str
     groups: list[dict[str, Any]]
+    source_sql: str | None = None  # set instead of `source` for query-backed sources
 
     # -- artifact -----------------------------------------------------------
 
@@ -159,8 +221,9 @@ class Limits:
     def from_dict(cls, d: dict[str, Any]) -> Limits:
         d = dict(d)
         version = d.pop("version", None)
-        if version != ARTIFACT_VERSION:
+        if version not in SUPPORTED_VERSIONS:
             raise ValueError(f"unsupported limits artifact version: {version!r}")
+        d.setdefault("source_sql", None)  # absent in v1 artifacts
         d["group_by"] = tuple(d["group_by"])
         d["baseline_window"] = tuple(d["baseline_window"])
         return cls(**d)
@@ -172,6 +235,14 @@ class Limits:
     # -- evaluation ---------------------------------------------------------
 
     def _default_source(self) -> Source:
+        if self.source_sql is not None:
+            return Source(
+                sql=self.source_sql,
+                ts=self.ts,
+                value=self.value,
+                group_by=self.group_by,
+                exposure=self.exposure,
+            )
         return Source(
             path=self.source,
             ts=self.ts,
@@ -197,9 +268,9 @@ class Limits:
                 f"source group_by {src.group_by} != limits group_by {self.group_by}"
             )
         since = str(since) if since is not None else self.baseline_window[1]
-        stream_sql = Stream(src, self.derive).sql()
 
         con = _connect()
+        stream_sql = _stream_relation(con, Stream(src, self.derive))
         con.register(
             "limits_tbl",
             pa.Table.from_pylist(

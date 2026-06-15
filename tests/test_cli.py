@@ -24,7 +24,7 @@ def test_baseline_check_chart_end_to_end(dataset, tmp_path):
     ])
     assert res.exit_code == 0, res.output
     artifact = json.loads(limits_path.read_text())
-    assert artifact["version"] == 1
+    assert artifact["version"] == 2
     assert len(artifact["groups"]) == 4
 
     # quiet early window: no injected signal active yet -> exit 0

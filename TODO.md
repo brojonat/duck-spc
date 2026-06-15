@@ -46,10 +46,25 @@
 - [ ] Deck: regenerate gauntlet numbers from the notebook when defaults
       change (numbers are pasted into `hooks["gauntlet"]`, provenance noted)
 
+## Entry points & detrending
+- [x] Custom SQL entry point: `Source.from_query` / `--query` projects any
+      Parquet into the contract; query saved in the artifact; materialized to
+      a temp table so it runs once and nested window functions work
+- [x] Seasonality footgun: prominent README callout + the simple escape
+      hatches (`diff`, `<period>:<stat>`, deseasonalize-in-`--query`)
+- [ ] Automatic detrending exploration — evaluate **Facebook Prophet**
+      (seasonal/trend decomposition) as an optional preprocessing step, vs a
+      lighter built-in. Open questions: extra dep weight, where it runs
+      (Python vs SQL), and how the removed seasonal profile gets frozen into
+      the artifact so `check` stays reproducible
+- [ ] Weekday-residual derivation as a first-class `--derive` (frozen
+      per-weekday medians in the artifact) — the no-new-dep version of the above
+- [ ] Stationarity sanity check: warn when a chosen stream still looks
+      seasonal/autocorrelated (so the footgun gets caught, not just documented)
+
 ## Roadmap (post-v1)
 - [ ] DuckLake source (`ducklake:postgres:...`) [blocked: v1]
 - [ ] Nonparametric quantile limits for heavy-tailed streams
-- [ ] Weekday-residual derivation (frozen per-weekday medians)
 - [ ] X̄ subgroup charts
 - [ ] Ingestion hot path (pg-messaging style log → sweeper → lake)
       [blocked: ducklake source]

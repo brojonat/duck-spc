@@ -66,6 +66,23 @@ def source_from(limits: Limits, override: str | None) -> Source | None:
     )
 
 
+def build_source(
+    source: str | None,
+    query: str | None,
+    ts: str,
+    value: str,
+    group_by: str,
+    exposure: str | None,
+) -> Source:
+    """Build a Source from either --source (Parquet) or --query (custom SQL)."""
+    if (source is None) == (query is None):
+        raise Fail("provide exactly one of --source (Parquet) or --query (custom SQL)")
+    cols = tuple(c.strip() for c in group_by.split(","))
+    if query is not None:
+        return Source.from_query(query, ts=ts, value=value, group_by=cols, exposure=exposure)
+    return Source(path=source, ts=ts, value=value, group_by=cols, exposure=exposure)
+
+
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.version_option(package_name="duck-spc")
 def cli() -> None:
@@ -76,7 +93,10 @@ def cli() -> None:
 
 
 @cli.command()
-@click.option("--source", required=True, help="parquet path/glob/prefix (local, s3://, gs://)")
+@click.option("--source", default=None, help="parquet path/glob/prefix (local, s3://, gs://)")
+@click.option("--query", default=None,
+              help="custom SQL producing ts, group cols, value[, exposure] "
+                   "(e.g. SELECT ... FROM read_parquet('...')); alternative to --source")
 @click.option("--ts", default="ts", show_default=True, help="timestamp column")
 @click.option("--value", required=True, help="value column")
 @click.option("--group-by", required=True, help="comma-separated stream-key columns")
@@ -86,15 +106,11 @@ def cli() -> None:
 @click.option("--window", required=True, help="baseline window START:END (dates, half-open)")
 @click.option("-o", "--out", type=click.Path(dir_okay=False, path_type=Path), default=None,
               help="write the limits artifact here instead of stdout")
-def baseline(source: str, ts: str, value: str, group_by: str, exposure: str | None,
-             derive: str, window: str, out: Path | None) -> None:
+def baseline(source: str | None, query: str | None, ts: str, value: str, group_by: str,
+             exposure: str | None, derive: str, window: str, out: Path | None) -> None:
     """Freeze per-group XmR limits from a baseline window."""
     start, end = parse_window(window)
-    src = Source(
-        path=source, ts=ts, value=value,
-        group_by=tuple(c.strip() for c in group_by.split(",")),
-        exposure=exposure,
-    )
+    src = build_source(source, query, ts, value, group_by, exposure)
     limits = src.derive(derive).baseline(start, end)
     if not limits.groups:
         raise Fail(
@@ -161,7 +177,10 @@ def chart(limits_path: str, group: str, out: Path, source: str | None,
 
 
 @cli.command()
-@click.option("--source", required=True, help="parquet path/glob/prefix (local, s3://, gs://)")
+@click.option("--source", default=None, help="parquet path/glob/prefix (local, s3://, gs://)")
+@click.option("--query", default=None,
+              help="custom SQL producing ts, group cols, value[, exposure]; "
+                   "alternative to --source")
 @click.option("--ts", default="ts", show_default=True, help="timestamp column")
 @click.option("--value", required=True, help="value column")
 @click.option("--group-by", required=True, help="comma-separated stream-key columns")
@@ -175,18 +194,15 @@ def chart(limits_path: str, group: str, out: Path, source: str | None,
               help="emit the check report JSON instead of charts")
 @click.option("-o", "--out", type=click.Path(dir_okay=False, path_type=Path), default=None,
               help="also save the limits artifact here")
-def look(source: str, ts: str, value: str, group_by: str, exposure: str | None, derive: str,
-         window: str | None, mr_rule: bool, as_json: bool, out: Path | None) -> None:
+def look(source: str | None, query: str | None, ts: str, value: str, group_by: str,
+         exposure: str | None, derive: str, window: str | None, mr_rule: bool,
+         as_json: bool, out: Path | None) -> None:
     """One shot: freeze a baseline, check the rest, results in your face.
 
     Exploration mode — production baselines deserve a deliberate --window
     and a saved artifact (`baseline` + `check`).
     """
-    src = Source(
-        path=source, ts=ts, value=value,
-        group_by=tuple(c.strip() for c in group_by.split(",")),
-        exposure=exposure,
-    )
+    src = build_source(source, query, ts, value, group_by, exposure)
     stream = src.derive(derive)
     if window is not None:
         start, end = parse_window(window)

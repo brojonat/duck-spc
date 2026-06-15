@@ -177,6 +177,67 @@ the per-period mean. Everything upstream of the
 `(ts, categories…, value[, exposure])` contract — joins, unit conversions,
 normalization inputs — is the caller's job.
 
+## Bring your own schema (custom SQL)
+
+Your Parquet rarely lands in the exact `(ts, category…, value[, exposure])`
+shape. Instead of reshaping it on disk, hand `look`/`baseline` a `--query`
+that projects your columns into the contract. It's a self-contained DuckDB
+`SELECT` — read your files with `read_parquet(...)` inside it, rename and
+compute as needed; `--ts` / `--value` / `--group-by` / `--exposure` then name
+the columns *it outputs*:
+
+```bash
+duck-spc baseline \
+  --query "SELECT event_time AS ts,
+                  site            AS region,
+                  status_code,
+                  latency_ms      AS value
+           FROM read_parquet('s3://bucket/raw/**/*.parquet')
+           WHERE status_code < 500" \
+  --value value --group-by region --window 2026-01-01:2026-01-29 \
+  > limits.json
+```
+
+`--source` and `--query` are alternatives (give exactly one). The query is
+saved into the limits artifact, so `check`/`visualize` reuse it with no extra
+flags. In the library it's `Source.from_query(sql, ts=, value=, group_by=,
+exposure=)`. Custom-SQL sources are materialized into a temp table before the
+XmR math runs, so the query executes once per operation regardless of how
+many streams it feeds.
+
+## ⚠️ Seasonality and trend: derive a stationary stream first
+
+**This is the easiest way to misuse SPC.** XmR limits assume successive points
+are *exchangeable* — no day-of-week cycle, no time-of-day rhythm, no growth
+trend. Point a control chart at raw seasonal/trending telemetry and you get
+one of two failures: limits so wide they never fire, or a chart that alarms
+every Monday morning forever. The chart isn't broken; it's faithfully
+reporting that Mondays differ from Sundays — which you already knew.
+
+The fix is never a fancier chart. It's **charting a derived stream that no
+longer has the temporal structure.** duck-spc gives you, in increasing power:
+
+- **`--derive diff`** — first differences. Kills a slow trend.
+- **`--derive <period>:<stat>`** — chart a per-period statistic (`day:p95`,
+  `hour:median`, …) instead of raw points; collapses within-period noise.
+- **`--query` with a window function** — subtract the seasonal profile
+  yourself. This deseasonalizes day-of-week effects in one line:
+
+  ```sql
+  SELECT ts, region, service,
+         value - avg(value) OVER (PARTITION BY region, service, dayofweek(ts))
+           AS value
+  FROM read_parquet('s3://bucket/events/**/*.parquet')
+  ```
+
+  Then chart *that* residual — it's stationary, so the limits mean something.
+
+If your process has genuine seasonality you haven't removed, **do not trust
+the chart yet.** Richer automatic detrending (e.g. Prophet-style
+seasonal/trend decomposition, frozen per-weekday baselines) is on the roadmap;
+until then, derive the stream and sanity-check that it looks stationary before
+reading signals into it.
+
 ## Library
 
 The CLI is a thin shell over the importable API:
@@ -190,6 +251,13 @@ src = Source(
     value="latency_ms",
     group_by=["region", "service"],
 )
+
+# ...or shape a non-matching schema with a query:
+# src = Source.from_query(
+#     "SELECT event_time AS ts, site AS region, latency_ms AS value "
+#     "FROM read_parquet('s3://bucket/raw/**/*.parquet')",
+#     ts="ts", value="value", group_by=["region"],
+# )
 
 # Derive the stationary stream, then freeze limits from a baseline window
 stream = src.derive("day:p95")
@@ -215,9 +283,10 @@ its own provenance so a chart's limits are always traceable:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "computed_at": "2026-06-06T00:00:00+00:00",
   "source": "s3://my-bucket/events/",
+  "source_sql": null,
   "ts": "ts", "value": "latency_ms", "exposure": null,
   "group_by": ["region", "service"],
   "derive": "day:p95",
@@ -232,8 +301,10 @@ its own provenance so a chart's limits are always traceable:
 }
 ```
 
-Group keys are explicit column/value maps (not joined strings), so
-categorical values containing commas can't corrupt the contract.
+Exactly one of `source` (a Parquet path) or `source_sql` (a custom query) is
+set; the other is `null`. Group keys are explicit column/value maps (not
+joined strings), so categorical values containing commas can't corrupt the
+contract. (v1 artifacts without `source_sql` still load.)
 
 ## Presentation
 

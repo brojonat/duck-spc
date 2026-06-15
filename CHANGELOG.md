@@ -7,6 +7,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Custom SQL entry point for non-matching schemas: `Source.from_query(...)`
+  and `--query` on `look`/`baseline` accept a self-contained DuckDB SELECT
+  that projects arbitrary Parquet into the `(ts, group…, value[, exposure])`
+  contract. The query is saved in the limits artifact (schema v2,
+  `source_sql`), so `check`/`visualize` reuse it; v1 artifacts still load.
+  Custom-SQL sources are materialized to a temp table before the XmR math, so
+  the query runs once and nested window functions execute cleanly.
+- Documentation of the **seasonality/trend footgun** — a prominent README
+  section on why raw seasonal data breaks XmR and the simple escape hatches
+  (`diff`, `<period>:<stat>`, and deseasonalizing inside `--query` with a
+  window function). Prophet-style auto-detrending tracked in TODO.
+
 - Slide deck (`docs/deck/index.html`) gained live d3 animations: the
   distribution-morph (standardized shapes go pathological while the ±3σ tail
   mass stays tiny) and a frozen-vs-rolling-limits demo (the rolling band rises
